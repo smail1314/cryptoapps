@@ -92,12 +92,12 @@
 
     <script>
         // --- Constants ---
-        // Added 'stability' factor: Higher means less random noise/wicks (BTC/ETH), Lower means more chaos (DOGE)
+        // Stability factors tweaked for more chaos based on user feedback
         const COINS = [
-            { id: 'BTC', name: 'Bitcoin', price: 98000, volatility: 0.0008, stability: 0.8, color: 'orange' },
-            { id: 'ETH', name: 'Ethereum', price: 3800, volatility: 0.0012, stability: 0.7, color: 'cyan' },
-            { id: 'SOL', name: 'Solana', price: 145, volatility: 0.0025, stability: 0.5, color: 'purple' },
-            { id: 'DOGE', name: 'Dogecoin', price: 0.15, volatility: 0.004, stability: 0.3, color: 'yellow' }
+            { id: 'BTC', name: 'Bitcoin', price: 98000, volatility: 0.001, stability: 0.6, color: 'orange' },
+            { id: 'ETH', name: 'Ethereum', price: 3800, volatility: 0.0015, stability: 0.5, color: 'cyan' },
+            { id: 'SOL', name: 'Solana', price: 145, volatility: 0.003, stability: 0.4, color: 'purple' },
+            { id: 'DOGE', name: 'Dogecoin', price: 0.15, volatility: 0.005, stability: 0.2, color: 'yellow' }
         ];
         const LEVERAGE_OPTIONS = [1, 2, 5, 10, 20, 50, 100];
         const MARGIN_PERCENT_OPTIONS = [0.1, 0.25, 0.5, 1.0]; 
@@ -110,7 +110,7 @@
                 selectedCoin: COINS[0],
                 currentPrice: COINS[0].price,
                 candles: [],
-                balance: 10000,
+                balance: 1000, // User requested 1000 start balance
                 leverage: 10, 
                 marginPercent: 0.1, 
                 position: null, 
@@ -126,7 +126,8 @@
                     momentum: 0,           // Current price velocity
                     volatilityMult: 1,     // Dynamic volatility multiplier
                     startPrice: null,      // To track where the event started (for pump & dump)
-                    isReversal: false      // Is this a pump & dump event?
+                    isReversal: false,     // Is this a pump & dump event?
+                    wickBias: 0            // For creating wicks
                 }
             },
         };
@@ -143,7 +144,7 @@
                 ShieldAlert: `<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="M12 8v4"/><path d="M12 16h.01"/>`,
                 Info: `<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>`,
                 BookOpen: `<path d="M2 19.5c0 .5.5 2 2 2h16c1.5 0 2-1.5 2-2M2 19.5c0-1.5 2-2 2-2h16c0 0 2 .5 2 2M6 21v-1.5M10 21v-1.5M14 21v-1.5M18 21v-1.5"/>`,
-                Gamepad2: `<path d="M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6"/>`, // Simplified gamepad
+                Gamepad2: `<path d="M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6"/>`, // Simplified gamepad
                 Box: `<rect width="20" height="20" x="2" y="2" rx="4"/><path d="M8 12h8"/><path d="M12 8v8"/>`,
                 Users: `<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`,
                 FileText: `<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9h5"/><path d="M10 13h5"/><path d="M10 17h3"/>`,
@@ -225,7 +226,6 @@
             let startX, startY, initialLeft, initialTop;
 
             const onStart = (e) => {
-                // Determine start position
                 if (e.type === 'touchstart') {
                     startX = e.touches[0].clientX;
                     startY = e.touches[0].clientY;
@@ -233,14 +233,10 @@
                     startX = e.clientX;
                     startY = e.clientY;
                 }
-
                 initialLeft = element.offsetLeft;
                 initialTop = element.offsetTop;
-
                 isDragging = true;
                 element.style.cursor = 'grabbing';
-                
-                // Add window listeners for movement outside element
                 if (e.type === 'touchstart') {
                     window.addEventListener('touchmove', onMove, { passive: false });
                     window.addEventListener('touchend', onEnd);
@@ -252,8 +248,7 @@
 
             const onMove = (e) => {
                 if (!isDragging) return;
-                e.preventDefault(); // Stop scrolling while dragging
-
+                e.preventDefault(); 
                 let currentX, currentY;
                 if (e.type === 'touchmove') {
                     currentX = e.touches[0].clientX;
@@ -262,24 +257,18 @@
                     currentX = e.clientX;
                     currentY = e.clientY;
                 }
-
                 const dx = currentX - startX;
                 const dy = currentY - startY;
-
                 let newLeft = initialLeft + dx;
                 let newTop = initialTop + dy;
-
-                // Boundary constraints
                 const containerRect = container.getBoundingClientRect();
                 const elemRect = element.getBoundingClientRect();
                 const minLeft = 0;
                 const maxLeft = containerRect.width - elemRect.width;
                 const minTop = 0;
                 const maxTop = containerRect.height - elemRect.height;
-
                 newLeft = Math.max(minLeft, Math.min(newLeft, maxLeft));
                 newTop = Math.max(minTop, Math.min(newTop, maxTop));
-
                 element.style.left = `${newLeft}px`;
                 element.style.top = `${newTop}px`;
                 element.style.right = 'auto';
@@ -299,7 +288,6 @@
             element.addEventListener('mousedown', onStart);
             element.addEventListener('touchstart', onStart, { passive: false });
         }
-
 
         // --- Logic ---
         function calculateFloatingPnL() {
@@ -369,7 +357,6 @@
 
         function renderLearnView() {
             const view = createElement('div', 'h-full overflow-y-auto pb-48 custom-scroll bg-slate-900');
-            
             const hero = `
                 <div class="relative pt-4 pb-6 px-6 border-b border-slate-800 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 overflow-hidden">
                     <div class="absolute top-0 right-0 opacity-20 pointer-events-none">
@@ -386,7 +373,6 @@
                     </div>
                 </div>
             `;
-
             const createSection = (title, icon, items) => {
                 const itemsHtml = items.map(item => `
                     <div class="glass-card rounded-2xl p-5 mb-4 hover:border-cyan-500/40 transition-all duration-300 group">
@@ -398,7 +384,6 @@
                         </div>
                     </div>
                 `).join('');
-
                 return `
                     <div class="mb-8">
                         <h2 class="text-xl font-bold text-white flex items-center gap-2 mb-4 px-2">
@@ -408,7 +393,6 @@
                     </div>
                 `;
             };
-
             const concepts = [
                 {
                     title: "理念：把「錢的控制權」還給你",
@@ -431,7 +415,6 @@
                     content: "<p><strong>礦工與驗證者：</strong>既然沒有銀行員工，誰來幫忙記帳？</p><p>答案是貢獻電腦算力的礦工，系統會自動發送加密貨幣作為獎勵，這是一個設計精妙的經濟誘因系統喵。</p>"
                 }
             ];
-
             const faq = [
                 {
                     title: "買賣加密貨幣「合法」嗎？",
@@ -454,7 +437,6 @@
                     content: "<ul class='list-disc pl-4 space-y-1'><li><strong>不代操：</strong>說「保證獲利」、「老師帶單」的都是詐騙。</li><li><strong>只用大平台：</strong>不要下載網友傳給你的奇怪 App。</li><li><strong>顧好私鑰：</strong>助記詞絕不給人，給了錢就沒了。</li></ul>"
                 }
             ];
-
             view.innerHTML = hero + 
                              `<div class="p-5 max-w-2xl mx-auto">
                                 ${createSection("核心觀念", Icon('Globe', 24, 'text-blue-400'), concepts)}
@@ -514,7 +496,7 @@
             return view;
         }
 
-        // --- ENHANCED GAME LOGIC ---
+        // --- ENHANCED GAME LOGIC v3: HELL MODE ---
         function runGameLoop() {
             const { game } = appState;
             const ms = game.marketState;
@@ -527,144 +509,148 @@
 
             // State Transitions
             if (ms.phase === 'normal') {
-                // In normal phase:
-                // 1. Oscillation around a moving baseline
-                // 2. Small random "traps" (micro-spikes)
-                // 3. Rare chance to trigger a major event (Big Move)
-                
-                // EXTREME RARITY ADJUSTMENT:
-                // 500ms per tick => 2 ticks per second => 1200 ticks = 10 minutes.
-                // Probability should be roughly 1/1500 to 1/2000 per tick for "extremely rare" feel.
-                // Let's use 0.0006 (0.06%) chance per tick.
-                if (Math.random() < 0.0006 && ms.eventTimer <= 0) {
+                // EXTREME RARITY ADJUSTMENT: 0.05% chance per tick (approx once per 15-20 mins)
+                if (Math.random() < 0.0005 && ms.eventTimer <= 0) {
                     // Initialize Event: "Fakeout" then "Rally/Crash"
                     ms.phase = 'fakeout';
-                    ms.eventDirection = Math.random() > 0.5 ? 1 : -1; // 1 = Bullish Event (eventual UP), -1 = Bearish
-                    ms.eventTimer = 10 + Math.floor(Math.random() * 10); // Fakeout lasts 5-10 seconds
-                    // Set target for the main move (1.5% to 4% spread over longer time)
+                    ms.eventDirection = Math.random() > 0.5 ? 1 : -1; 
+                    ms.eventTimer = 20 + Math.floor(Math.random() * 20); // Longer fakeout
                     ms.targetTotalChange = (0.015 + Math.random() * 0.025); 
-                    ms.startPrice = game.currentPrice; // Record start price
-                    // 15% chance of a "Pump & Dump" (Full Reversal)
-                    ms.isReversal = Math.random() < 0.15; 
+                    ms.startPrice = game.currentPrice; 
+                    ms.isReversal = Math.random() < 0.2; // 20% Pump & Dump chance
                     ms.volatilityMult = 1.0;
                     console.log(`[Market] Event Triggered! Direction: ${ms.eventDirection > 0 ? 'UP' : 'DOWN'} | Reversal: ${ms.isReversal}`);
                 }
             } 
             else if (ms.phase === 'fakeout') {
-                // If fakeout timer ends, switch to the main rally/crash
                 if (ms.eventTimer <= 0) {
                     ms.phase = 'rally';
-                    // Main move lasts much longer (60s - 120s -> 120-240 ticks) for TREND feel
-                    ms.eventTimer = 120 + Math.floor(Math.random() * 120); 
-                    ms.totalEventDuration = ms.eventTimer; // Store total duration for progress calc
+                    ms.eventTimer = 150 + Math.floor(Math.random() * 150); // Trend phase
+                    ms.totalEventDuration = ms.eventTimer; 
                 }
             } 
             else if (ms.phase === 'rally') {
-                // End of event
                 if (ms.eventTimer <= 0) {
                     ms.phase = 'normal';
-                    ms.targetPrice = game.currentPrice; // Reset magnet to new level
+                    ms.targetPrice = game.currentPrice; 
                     ms.momentum = 0;
                 }
             }
 
-            // --- 2. Price Calculation Logic ---
+            // --- 2. Price Calculation Logic (The Meat Grinder) ---
             
             let changePercent = 0;
             const baseVol = coin.volatility;
-            // Increased base noise to prevent flat lines (1.1 -> 1.5 multiplier)
-            // Also ensure it's never exactly 0 effectively
-            const stabilityFactor = (1.1 - (coin.stability || 0.5));
-            const noise = (Math.random() - 0.5) * baseVol * stabilityFactor * 1.5;
+            
+            // HIGH NOISE: Intentionally high frequency jitter to simulate "dirty" charts
+            // Stability factor reduced impact to allow more chaos
+            const stabilityFactor = (1.2 - (coin.stability || 0.5)); 
+            const noise = (Math.random() - 0.5) * baseVol * stabilityFactor * 2.0; // 2.0x Noise multiplier
 
             if (ms.phase === 'normal') {
-                // --- Normal Mode: Oscillation & Traps ---
+                // --- Normal Mode: Wandering with localized chaos ---
                 
-                // Prevent flatlines: Add wandering momentum
-                ms.momentum = ms.momentum * 0.9 + (Math.random() - 0.5) * baseVol * 0.5;
+                // Random Walk Momentum
+                ms.momentum = ms.momentum * 0.92 + (Math.random() - 0.5) * baseVol * 0.8;
                 
-                // Magnet effect: Pull price towards targetPrice
                 if (!ms.targetPrice) ms.targetPrice = game.currentPrice;
                 
-                // Drift the target price slowly (Brownian motion) so it's not static
-                ms.targetPrice *= (1 + (Math.random() - 0.5) * 0.005);
+                // Slow drift of target
+                ms.targetPrice *= (1 + (Math.random() - 0.5) * 0.008);
                 
                 const distToTarget = (ms.targetPrice - game.currentPrice) / game.currentPrice;
-                const pull = distToTarget * 0.02; // Reduced pull strength
+                const pull = distToTarget * 0.015; 
                 
-                // Micro-Trap: occasional sharp spike
+                // Micro-Dump/Pump (Mini events)
                 let trap = 0;
-                if (Math.random() < 0.08) { // 8% chance of a "wick" attempt
-                   trap = (Math.random() - 0.5) * baseVol * 2.0; 
+                if (Math.random() < 0.05) { 
+                   trap = (Math.random() - 0.5) * baseVol * 3.0; 
                 }
 
                 changePercent = noise + pull + ms.momentum + trap;
 
             } else if (ms.phase === 'fakeout') {
-                // --- Fakeout Mode: Move OPPOSITE to eventDirection ---
-                // "Go down before you go up"
+                // Stronger fakeout: Drifting wrong way
                 const fakeDir = -1 * ms.eventDirection;
-                const steadyDrift = fakeDir * (baseVol * 0.5); // Slow drift opposite way
-                changePercent = steadyDrift + (noise * 0.8); // Low noise, suspicious calm
+                const steadyDrift = fakeDir * (baseVol * 0.8); 
+                // Add "False Hope" wicks in the fake direction
+                const falseHope = (Math.random() < 0.3) ? fakeDir * baseVol * 2 : 0;
+                changePercent = steadyDrift + noise + falseHope; 
 
             } else if (ms.phase === 'rally') {
-                // --- Rally Mode: Progressive move with SHAKEOUTS ---
-                const progress = 1 - (ms.eventTimer / ms.totalEventDuration); // 0 to 1
+                // --- Rally Mode ---
+                const progress = 1 - (ms.eventTimer / ms.totalEventDuration);
                 
-                // Smoother Curve: Combined Sine waves for organic feel
-                // Main trend
+                // Trend Logic
                 let trendForce = Math.sin(progress * Math.PI); 
-                
-                // REVERSAL LOGIC: If it's a pump & dump, reversing direction after peak
                 let currentDir = ms.eventDirection;
-                if (ms.isReversal && progress > 0.6) {
-                    // After 60% progress, start crashing back
-                    // Force is negative relative to event direction, and stronger to crash fast
-                    trendForce = -1.5 * Math.sin(progress * Math.PI); 
+                
+                if (ms.isReversal && progress > 0.55) {
+                    // Bart Simpson Pattern (Pump & Dump)
+                    // Crash back harder than the pump
+                    trendForce = -1.8 * Math.sin(progress * Math.PI); 
                 }
                 
-                // Lubrication: Use trendForce more smoothly
                 const stepMove = (ms.targetTotalChange / ms.totalEventDuration) * currentDir * 2.5 * trendForce;
                 
-                // Shakeout Mechanism (Increased Probability: 0.1 -> 0.18)
+                // SHAKEOUTS (The "Stop Loss Hunter")
+                // 25% chance to violently wick against the trend
                 let shakeout = 0;
-                if (Math.random() < 0.18) {
-                    // Stronger snap back but scaled down for trend feel
-                    shakeout = -1 * currentDir * (baseVol * 5.0); 
+                if (Math.random() < 0.25) {
+                    // Deep correction wick
+                    shakeout = -1 * currentDir * (baseVol * 6.0); 
                 }
                 
-                // Add momentum to smooth out the noise
-                ms.momentum = ms.momentum * 0.5 + stepMove * 0.5;
-                
-                changePercent = ms.momentum + (noise * 2.0) + shakeout;
+                ms.momentum = ms.momentum * 0.6 + stepMove * 0.4;
+                changePercent = ms.momentum + (noise * 1.5) + shakeout;
             }
 
-            // Apply change
-            let newPrice = game.currentPrice * (1 + changePercent);
-            newPrice = Math.max(0.000001, newPrice); // Safety floor
+            // --- 3. WICK ENGINE (The Pin Bar Generator) ---
+            // Independent from close price, calculating High/Low to be aggressive
+            // This makes sure candles have long tails even if close price is normal
+            const rawNewPrice = game.currentPrice * (1 + changePercent);
+            let newPrice = Math.max(0.000001, rawNewPrice);
             
+            // Wick Logic: 
+            // Sometimes price briefly "touched" a much higher/lower level during the 500ms interval
+            // We simulate this by forcefully expanding High/Low logic below
+            let wickHighMult = 1.0;
+            let wickLowMult = 1.0;
+            
+            // 30% chance of a nasty wick
+            if (Math.random() < 0.3) {
+                if (Math.random() > 0.5) wickHighMult = 1.0 + (baseVol * 5 * Math.random()); // Up wick
+                else wickLowMult = 1.0 - (baseVol * 5 * Math.random()); // Down wick
+            }
+
             const direction = newPrice >= game.currentPrice ? 'up' : 'down';
 
-            // Check Liquidation (Passive check only, does not influence price)
+            // Check Liquidation (Based on the WICKS, not just close price!)
+            // This is key: You get liquidated by the wick even if price comes back
+            const potentialHigh = Math.max(game.currentPrice, newPrice) * wickHighMult;
+            const potentialLow = Math.min(game.currentPrice, newPrice) * wickLowMult;
+
             if (game.position) {
-                const isLiq = (game.position.type === 'long' && newPrice <= game.position.liqPrice) ||
-                              (game.position.type === 'short' && newPrice >= game.position.liqPrice);
+                const isLiq = (game.position.type === 'long' && potentialLow <= game.position.liqPrice) ||
+                              (game.position.type === 'short' && potentialHigh >= game.position.liqPrice);
                 if (isLiq) liquidatePosition();
             }
 
             // Update Candles
             let newCandles = [...game.candles];
-            // Candle update logic (Time-based aggregation simulation)
-            // 15% chance to start new candle (simulating time passing), or force if too few
-            // Otherwise update current candle
             if (newCandles.length === 0 || Math.random() > 0.85) { 
-                newCandles.push({ open: newPrice, close: newPrice, high: newPrice, low: newPrice });
+                newCandles.push({ 
+                    open: newPrice, 
+                    close: newPrice, 
+                    high: newPrice * wickHighMult, 
+                    low: newPrice * wickLowMult 
+                });
                 if (newCandles.length > 50) newCandles.shift(); 
             } else {
                 const cur = newCandles[newCandles.length - 1];
                 cur.close = newPrice;
-                cur.high = Math.max(cur.high, newPrice);
-                cur.low = Math.min(cur.low, newPrice);
+                cur.high = Math.max(cur.high, Math.max(newPrice, potentialHigh));
+                cur.low = Math.min(cur.low, Math.min(newPrice, potentialLow));
             }
 
             Object.assign(appState.game, {
@@ -684,29 +670,27 @@
             appState.game.intervalId = setInterval(runGameLoop, 500);
 
             if (!appState.game.isInitialized) {
-                // Initialize sophisticated history
                 const startPrice = appState.game.selectedCoin.price;
                 let temp = startPrice;
                 const history = [];
-                // Generate a bit of "Fake history" that looks realistic
                 for(let i=0; i<40; i++) {
                     const open = temp;
-                    const change = (Math.random() - 0.5) * appState.game.selectedCoin.volatility * 5;
+                    // Chaotic history generation
+                    const change = (Math.random() - 0.5) * appState.game.selectedCoin.volatility * 10;
                     const close = open * (1 + change);
                     history.push({ 
                         open, close, 
-                        high: Math.max(open, close) * (1 + Math.random() * 0.001), 
-                        low: Math.min(open, close) * (1 - Math.random() * 0.001) 
+                        high: Math.max(open, close) * (1 + Math.random() * 0.005), 
+                        low: Math.min(open, close) * (1 - Math.random() * 0.005) 
                     });
                     temp = close;
                 }
                 
-                // Initialize Market State
                 const initialMarketState = {
                     phase: 'normal',
                     eventDirection: 0,
                     eventTimer: 0,
-                    targetPrice: temp, // Start with current price as target
+                    targetPrice: temp, 
                     momentum: 0,
                     volatilityMult: 1,
                     startPrice: null,
