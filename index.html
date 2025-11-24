@@ -124,7 +124,9 @@
                     eventTimer: 0,         // Countdown for current phase
                     targetPrice: null,     // Magnet price for oscillation
                     momentum: 0,           // Current price velocity
-                    volatilityMult: 1      // Dynamic volatility multiplier
+                    volatilityMult: 1,     // Dynamic volatility multiplier
+                    startPrice: null,      // To track where the event started (for pump & dump)
+                    isReversal: false      // Is this a pump & dump event?
                 }
             },
         };
@@ -530,24 +532,30 @@
                 // 2. Small random "traps" (micro-spikes)
                 // 3. Rare chance to trigger a major event (Big Move)
                 
-                // 0.5% chance per tick to trigger an event, if no event is running
-                if (Math.random() < 0.005 && ms.eventTimer <= 0) {
+                // EXTREME RARITY ADJUSTMENT:
+                // 500ms per tick => 2 ticks per second => 1200 ticks = 10 minutes.
+                // Probability should be roughly 1/1500 to 1/2000 per tick for "extremely rare" feel.
+                // Let's use 0.0006 (0.06%) chance per tick.
+                if (Math.random() < 0.0006 && ms.eventTimer <= 0) {
                     // Initialize Event: "Fakeout" then "Rally/Crash"
                     ms.phase = 'fakeout';
                     ms.eventDirection = Math.random() > 0.5 ? 1 : -1; // 1 = Bullish Event (eventual UP), -1 = Bearish
-                    ms.eventTimer = 10 + Math.floor(Math.random() * 10); // Fakeout lasts 5-10 seconds (assuming 500ms tick)
+                    ms.eventTimer = 10 + Math.floor(Math.random() * 10); // Fakeout lasts 5-10 seconds
                     // Set target for the main move (3% to 5%)
                     ms.targetTotalChange = (0.03 + Math.random() * 0.02); 
+                    ms.startPrice = game.currentPrice; // Record start price
+                    // 15% chance of a "Pump & Dump" (Full Reversal)
+                    ms.isReversal = Math.random() < 0.15; 
                     ms.volatilityMult = 1.0;
-                    console.log(`[Market] Event Triggered! Direction: ${ms.eventDirection > 0 ? 'UP' : 'DOWN'}`);
+                    console.log(`[Market] Event Triggered! Direction: ${ms.eventDirection > 0 ? 'UP' : 'DOWN'} | Reversal: ${ms.isReversal}`);
                 }
             } 
             else if (ms.phase === 'fakeout') {
                 // If fakeout timer ends, switch to the main rally/crash
                 if (ms.eventTimer <= 0) {
                     ms.phase = 'rally';
-                    // Main move lasts longer (15-25 seconds) for progressive feel
-                    ms.eventTimer = 30 + Math.floor(Math.random() * 20); 
+                    // Main move lasts longer (15-25 seconds -> 30-50 ticks)
+                    ms.eventTimer = 40 + Math.floor(Math.random() * 40); 
                     ms.totalEventDuration = ms.eventTimer; // Store total duration for progress calc
                 }
             } 
@@ -564,51 +572,71 @@
             
             let changePercent = 0;
             const baseVol = coin.volatility;
-            // Stability factor: BTC/ETH have less random noise
-            const noise = (Math.random() - 0.5) * baseVol * (1.1 - (coin.stability || 0.5));
+            // Increased base noise to prevent flat lines (1.1 -> 1.5 multiplier)
+            // Also ensure it's never exactly 0 effectively
+            const stabilityFactor = (1.1 - (coin.stability || 0.5));
+            const noise = (Math.random() - 0.5) * baseVol * stabilityFactor * 1.5;
 
             if (ms.phase === 'normal') {
                 // --- Normal Mode: Oscillation & Traps ---
+                
+                // Prevent flatlines: Add wandering momentum
+                ms.momentum = ms.momentum * 0.9 + (Math.random() - 0.5) * baseVol * 0.5;
                 
                 // Magnet effect: Pull price towards targetPrice
                 if (!ms.targetPrice) ms.targetPrice = game.currentPrice;
                 
                 // Drift the target price slowly (Brownian motion) so it's not static
-                ms.targetPrice *= (1 + (Math.random() - 0.5) * 0.001);
+                ms.targetPrice *= (1 + (Math.random() - 0.5) * 0.005);
                 
                 const distToTarget = (ms.targetPrice - game.currentPrice) / game.currentPrice;
-                const pull = distToTarget * 0.05; // Elasticity strength
+                const pull = distToTarget * 0.02; // Reduced pull strength
                 
-                // Micro-Trap: occasional sharp spike that immediately reverts next tick (handled by noise usually, but let's add specific trap logic)
+                // Micro-Trap: occasional sharp spike
                 let trap = 0;
                 if (Math.random() < 0.08) { // 8% chance of a "wick" attempt
                    trap = (Math.random() - 0.5) * baseVol * 2.0; 
                 }
 
-                changePercent = noise + pull + trap;
+                changePercent = noise + pull + ms.momentum + trap;
 
             } else if (ms.phase === 'fakeout') {
                 // --- Fakeout Mode: Move OPPOSITE to eventDirection ---
                 // "Go down before you go up"
                 const fakeDir = -1 * ms.eventDirection;
                 const steadyDrift = fakeDir * (baseVol * 0.5); // Slow drift opposite way
-                changePercent = steadyDrift + (noise * 0.5); // Low noise, suspicious calm
+                changePercent = steadyDrift + (noise * 0.8); // Low noise, suspicious calm
 
             } else if (ms.phase === 'rally') {
-                // --- Rally Mode: Progressive move in eventDirection ---
+                // --- Rally Mode: Progressive move with SHAKEOUTS ---
                 const progress = 1 - (ms.eventTimer / ms.totalEventDuration); // 0 to 1
                 
-                // Non-linear ease-in-out curve for natural market surge
-                // Starts slow, accelerates, then slows down
-                // Using Sine wave for intensity
-                const intensity = Math.sin(progress * Math.PI) * 2.0; 
+                // Smoother Curve: Combined Sine waves for organic feel
+                // Main trend
+                let trendForce = Math.sin(progress * Math.PI); 
                 
-                // Calculate step size to reach target ~3-5%
-                // Spread target change over total duration
-                const stepMove = (ms.targetTotalChange / ms.totalEventDuration) * ms.eventDirection * intensity;
+                // REVERSAL LOGIC: If it's a pump & dump, reversing direction after peak
+                let currentDir = ms.eventDirection;
+                if (ms.isReversal && progress > 0.6) {
+                    // After 60% progress, start crashing back
+                    // Force is negative relative to event direction, and stronger to crash fast
+                    trendForce = -1.5 * Math.sin(progress * Math.PI); 
+                }
                 
-                // Add volatility during the move (high volume feel)
-                changePercent = stepMove + (noise * 1.5); 
+                // Lubrication: Use trendForce more smoothly
+                const stepMove = (ms.targetTotalChange / ms.totalEventDuration) * currentDir * 2.5 * trendForce;
+                
+                // Shakeout Mechanism (Increased Probability: 0.1 -> 0.18)
+                let shakeout = 0;
+                if (Math.random() < 0.18) {
+                    // Stronger snap back
+                    shakeout = -1 * currentDir * (baseVol * 10.0); 
+                }
+                
+                // Add momentum to smooth out the noise
+                ms.momentum = ms.momentum * 0.5 + stepMove * 0.5;
+                
+                changePercent = ms.momentum + (noise * 2.0) + shakeout;
             }
 
             // Apply change
@@ -680,7 +708,9 @@
                     eventTimer: 0,
                     targetPrice: temp, // Start with current price as target
                     momentum: 0,
-                    volatilityMult: 1
+                    volatilityMult: 1,
+                    startPrice: null,
+                    isReversal: false
                 };
 
                 setNestedState('game', { 
