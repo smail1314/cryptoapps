@@ -110,7 +110,7 @@
                 selectedCoin: COINS[0],
                 currentPrice: COINS[0].price,
                 candles: [],
-                balance: 10000,
+                balance: 1000, // <--- 修改 1：初始本金改為 1000 喵！
                 leverage: 10, 
                 marginPercent: 0.1, 
                 position: null, 
@@ -124,7 +124,10 @@
                     eventTimer: 0,         // Countdown for current phase
                     targetPrice: null,     // Magnet price for oscillation
                     momentum: 0,           // Current price velocity
-                    volatilityMult: 1      // Dynamic volatility multiplier
+                    volatilityMult: 1,     // Dynamic volatility multiplier
+                    // 新增：微趨勢控制變數，創造密集震盪
+                    microTrendDir: 0,       
+                    microTrendTimer: 0
                 }
             },
         };
@@ -141,13 +144,13 @@
                 ShieldAlert: `<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="M12 8v4"/><path d="M12 16h.01"/>`,
                 Info: `<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>`,
                 BookOpen: `<path d="M2 19.5c0 .5.5 2 2 2h16c1.5 0 2-1.5 2-2M2 19.5c0-1.5 2-2 2-2h16c0 0 2 .5 2 2M6 21v-1.5M10 21v-1.5M14 21v-1.5M18 21v-1.5"/>`,
-                Gamepad2: `<path d="M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6"/>`, // Simplified gamepad
+                Gamepad2: `<path d="M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6"/>`, // Simplified gamepad
                 Box: `<rect width="20" height="20" x="2" y="2" rx="4"/><path d="M8 12h8"/><path d="M12 8v8"/>`,
                 Users: `<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`,
                 FileText: `<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9h5"/><path d="M10 13h5"/><path d="M10 17h3"/>`,
                 Gift: `<rect x="3" y="8" width="18" height="13" rx="2"/><path d="M12 8V3H6a2 2 0 0 1-2-2v5"/><path d="M12 8V3h6a2 2 0 0 0 2-2v5"/>`,
                 AlertTriangle: `<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>`,
-                Globe: `<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>`,
+                Globe: `<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1 4-10z"/>`,
                 Check: `<polyline points="20 6 9 17 4 12"/>`,
                 X: `<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>`,
                 Lock: `<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path>`,
@@ -530,11 +533,9 @@
                 // 2. Small random "traps" (micro-spikes)
                 // 3. Rare chance to trigger a major event (Big Move)
                 
-                // EXTREME RARITY ADJUSTMENT:
-                // 500ms per tick => 2 ticks per second => 1200 ticks = 10 minutes.
-                // Probability should be roughly 1/1500 to 1/2000 per tick for "extremely rare" feel.
-                // Let's use 0.0006 (0.06%) chance per tick.
-                if (Math.random() < 0.0006 && ms.eventTimer <= 0) {
+                // --- 修改 2：降低大行情觸發機率 ---
+                // 從 0.0006 (0.06%) 降到 0.0001 (0.01%)，減少暴漲暴跌
+                if (Math.random() < 0.0001 && ms.eventTimer <= 0) {
                     // Initialize Event: "Fakeout" then "Rally/Crash"
                     ms.phase = 'fakeout';
                     ms.eventDirection = Math.random() > 0.5 ? 1 : -1; // 1 = Bullish Event (eventual UP), -1 = Bearish
@@ -588,7 +589,20 @@
                    trap = (Math.random() - 0.5) * baseVol * 2.0; 
                 }
 
-                changePercent = noise + pull + trap;
+                // --- 修改 3：微趨勢 (Micro-Trend) 邏輯 ---
+                // 創造密集的上下震盪，而非隨機漫步
+                if (ms.microTrendTimer <= 0) {
+                    // 隨機決定一個新方向 (1: 上, -1: 下)
+                    ms.microTrendDir = Math.random() > 0.5 ? 1 : -1;
+                    // 持續時間短，約 2-5 秒 (4-10 ticks)
+                    ms.microTrendTimer = 4 + Math.floor(Math.random() * 6);
+                }
+                ms.microTrendTimer--;
+                
+                // 施加微趨勢力量
+                const microTrendForce = ms.microTrendDir * (baseVol * 0.4); 
+
+                changePercent = noise + pull + trap + microTrendForce;
 
             } else if (ms.phase === 'fakeout') {
                 // --- Fakeout Mode: Move OPPOSITE to eventDirection ---
@@ -692,7 +706,9 @@
                     eventTimer: 0,
                     targetPrice: temp, // Start with current price as target
                     momentum: 0,
-                    volatilityMult: 1
+                    volatilityMult: 1,
+                    microTrendDir: 0,
+                    microTrendTimer: 0
                 };
 
                 setNestedState('game', { 
