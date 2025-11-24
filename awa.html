@@ -141,7 +141,7 @@
                 ShieldAlert: `<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="M12 8v4"/><path d="M12 16h.01"/>`,
                 Info: `<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>`,
                 BookOpen: `<path d="M2 19.5c0 .5.5 2 2 2h16c1.5 0 2-1.5 2-2M2 19.5c0-1.5 2-2 2-2h16c0 0 2 .5 2 2M6 21v-1.5M10 21v-1.5M14 21v-1.5M18 21v-1.5"/>`,
-                Gamepad2: `<path d="M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6"/>`, // Simplified gamepad
+                Gamepad2: `<path d="M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6"/>`, // Simplified gamepad
                 Box: `<rect width="20" height="20" x="2" y="2" rx="4"/><path d="M8 12h8"/><path d="M12 8v8"/>`,
                 Users: `<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`,
                 FileText: `<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9h5"/><path d="M10 13h5"/><path d="M10 17h3"/>`,
@@ -530,12 +530,15 @@
                 // 2. Small random "traps" (micro-spikes)
                 // 3. Rare chance to trigger a major event (Big Move)
                 
-                // 0.5% chance per tick to trigger an event, if no event is running
-                if (Math.random() < 0.005 && ms.eventTimer <= 0) {
+                // EXTREME RARITY ADJUSTMENT:
+                // 500ms per tick => 2 ticks per second => 1200 ticks = 10 minutes.
+                // Probability should be roughly 1/1500 to 1/2000 per tick for "extremely rare" feel.
+                // Let's use 0.0006 (0.06%) chance per tick.
+                if (Math.random() < 0.0006 && ms.eventTimer <= 0) {
                     // Initialize Event: "Fakeout" then "Rally/Crash"
                     ms.phase = 'fakeout';
                     ms.eventDirection = Math.random() > 0.5 ? 1 : -1; // 1 = Bullish Event (eventual UP), -1 = Bearish
-                    ms.eventTimer = 10 + Math.floor(Math.random() * 10); // Fakeout lasts 5-10 seconds (assuming 500ms tick)
+                    ms.eventTimer = 10 + Math.floor(Math.random() * 10); // Fakeout lasts 5-10 seconds
                     // Set target for the main move (3% to 5%)
                     ms.targetTotalChange = (0.03 + Math.random() * 0.02); 
                     ms.volatilityMult = 1.0;
@@ -546,8 +549,8 @@
                 // If fakeout timer ends, switch to the main rally/crash
                 if (ms.eventTimer <= 0) {
                     ms.phase = 'rally';
-                    // Main move lasts longer (15-25 seconds) for progressive feel
-                    ms.eventTimer = 30 + Math.floor(Math.random() * 20); 
+                    // Main move lasts longer (15-25 seconds -> 30-50 ticks)
+                    ms.eventTimer = 40 + Math.floor(Math.random() * 40); 
                     ms.totalEventDuration = ms.eventTimer; // Store total duration for progress calc
                 }
             } 
@@ -579,7 +582,7 @@
                 const distToTarget = (ms.targetPrice - game.currentPrice) / game.currentPrice;
                 const pull = distToTarget * 0.05; // Elasticity strength
                 
-                // Micro-Trap: occasional sharp spike that immediately reverts next tick (handled by noise usually, but let's add specific trap logic)
+                // Micro-Trap: occasional sharp spike
                 let trap = 0;
                 if (Math.random() < 0.08) { // 8% chance of a "wick" attempt
                    trap = (Math.random() - 0.5) * baseVol * 2.0; 
@@ -595,20 +598,29 @@
                 changePercent = steadyDrift + (noise * 0.5); // Low noise, suspicious calm
 
             } else if (ms.phase === 'rally') {
-                // --- Rally Mode: Progressive move in eventDirection ---
+                // --- Rally Mode: Progressive move with SHAKEOUTS ---
                 const progress = 1 - (ms.eventTimer / ms.totalEventDuration); // 0 to 1
                 
-                // Non-linear ease-in-out curve for natural market surge
-                // Starts slow, accelerates, then slows down
-                // Using Sine wave for intensity
-                const intensity = Math.sin(progress * Math.PI) * 2.0; 
+                // Non-linear ease-in-out curve for natural market surge (starts slow, fast mid, slow end)
+                const trendSpeed = Math.sin(progress * Math.PI); 
                 
-                // Calculate step size to reach target ~3-5%
-                // Spread target change over total duration
-                const stepMove = (ms.targetTotalChange / ms.totalEventDuration) * ms.eventDirection * intensity;
+                // Calculate step size based on target change
+                // We multiply by trendSpeed to concentrate movement in the middle
+                const stepMove = (ms.targetTotalChange / ms.totalEventDuration) * ms.eventDirection * 2.5 * trendSpeed;
                 
-                // Add volatility during the move (high volume feel)
-                changePercent = stepMove + (noise * 1.5); 
+                // High Noise during rally (Jagged lines)
+                const rallyNoise = (Math.random() - 0.5) * baseVol * 3.0;
+                
+                // --- THE ANTI-1729x MECHANISM: SHAKEOUTS ---
+                // 10% chance per tick to move violently AGAINST the trend
+                // This liquidates high leverage traders holding the "correct" direction
+                let shakeout = 0;
+                if (Math.random() < 0.1) {
+                    // Move opposite to eventDirection
+                    shakeout = -1 * ms.eventDirection * (baseVol * 8.0); // Very strong counter-wick
+                }
+                
+                changePercent = stepMove + rallyNoise + shakeout;
             }
 
             // Apply change
