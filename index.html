@@ -92,15 +92,15 @@
 
     <script>
         // --- Constants ---
-        // Added 'stability' factor: Higher means less random noise/wicks (BTC/ETH), Lower means more chaos (DOGE)
         const COINS = [
-            { id: 'BTC', name: 'Bitcoin', price: 98000, volatility: 0.0008, stability: 0.8, color: 'orange' },
-            { id: 'ETH', name: 'Ethereum', price: 3800, volatility: 0.0012, stability: 0.7, color: 'cyan' },
-            { id: 'SOL', name: 'Solana', price: 145, volatility: 0.0025, stability: 0.5, color: 'purple' },
-            { id: 'DOGE', name: 'Dogecoin', price: 0.15, volatility: 0.004, stability: 0.3, color: 'yellow' }
+            { id: 'BTC', name: 'Bitcoin', price: 98000, volatility: 0.0004, stability: 0.7, color: 'orange' },
+            { id: 'ETH', name: 'Ethereum', price: 3800, volatility: 0.0006, stability: 0.6, color: 'cyan' },
+            { id: 'SOL', name: 'Solana', price: 145, volatility: 0.0012, stability: 0.5, color: 'purple' },
+            { id: 'DOGE', name: 'Dogecoin', price: 0.15, volatility: 0.002, stability: 0.3, color: 'yellow' }
         ];
         const LEVERAGE_OPTIONS = [1, 2, 5, 10, 20, 50, 100];
         const MARGIN_PERCENT_OPTIONS = [0.1, 0.25, 0.5, 1.0]; 
+        const MAX_SESSION_CHANGE = 0.15; // 15% max change from session start
 
         // --- State ---
         const appState = {
@@ -109,24 +109,31 @@
             game: {
                 selectedCoin: COINS[0],
                 currentPrice: COINS[0].price,
+                startSessionPrice: COINS[0].price, // Track start price for the 15% rule
                 candles: [],
-                balance: 10000,
+                balance: 1000, 
                 leverage: 10, 
                 marginPercent: 0.1, 
                 position: null, 
                 lastPriceDirection: null,
                 intervalId: null,
                 isInitialized: false,
-                // Enhanced Market Logic State
-                marketState: {
-                    phase: 'normal',       // 'normal', 'fakeout', 'rally'
-                    eventDirection: 0,     // 1 (Up) or -1 (Down)
-                    eventTimer: 0,         // Countdown for current phase
-                    targetPrice: null,     // Magnet price for oscillation
-                    momentum: 0,           // Current price velocity
-                    volatilityMult: 1,     // Dynamic volatility multiplier
-                    startPrice: null,      // To track where the event started (for pump & dump)
-                    isReversal: false      // Is this a pump & dump event?
+                // Track user performance for "God Mode" punishment
+                userStats: {
+                    winStreak: 0,
+                    lastTradeResult: null
+                },
+                // NEW: Advanced Market Engine State
+                marketEngine: {
+                    tickCount: 0,
+                    currentTrend: 'ranging', // ranging, bull, bear
+                    trendDuration: 0,
+                    targetPrice: null,
+                    supportLevel: null,
+                    resistanceLevel: null,
+                    fakeoutMode: false,
+                    fakeoutCounter: 0,
+                    godModeActive: false // If true, market moves against user
                 }
             },
         };
@@ -143,7 +150,7 @@
                 ShieldAlert: `<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="M12 8v4"/><path d="M12 16h.01"/>`,
                 Info: `<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>`,
                 BookOpen: `<path d="M2 19.5c0 .5.5 2 2 2h16c1.5 0 2-1.5 2-2M2 19.5c0-1.5 2-2 2-2h16c0 0 2 .5 2 2M6 21v-1.5M10 21v-1.5M14 21v-1.5M18 21v-1.5"/>`,
-                Gamepad2: `<path d="M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6"/>`, // Simplified gamepad
+                Gamepad2: `<path d="M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6M6 15h3m6 0h3m-9-3v3m0 3v3M12 2v20m9-9h-3m-3-6h3m0 6v3m0 3v3m-3-9V6m-6 3h-3m3 0V6"/>`, 
                 Box: `<rect width="20" height="20" x="2" y="2" rx="4"/><path d="M8 12h8"/><path d="M12 8v8"/>`,
                 Users: `<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`,
                 FileText: `<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9h5"/><path d="M10 13h5"/><path d="M10 17h3"/>`,
@@ -219,88 +226,6 @@
             return coinId === 'DOGE' ? 5 : 2;
         }
 
-        // --- DRAG LOGIC ---
-        function makeDraggable(element, container) {
-            let isDragging = false;
-            let startX, startY, initialLeft, initialTop;
-
-            const onStart = (e) => {
-                // Determine start position
-                if (e.type === 'touchstart') {
-                    startX = e.touches[0].clientX;
-                    startY = e.touches[0].clientY;
-                } else {
-                    startX = e.clientX;
-                    startY = e.clientY;
-                }
-
-                initialLeft = element.offsetLeft;
-                initialTop = element.offsetTop;
-
-                isDragging = true;
-                element.style.cursor = 'grabbing';
-                
-                // Add window listeners for movement outside element
-                if (e.type === 'touchstart') {
-                    window.addEventListener('touchmove', onMove, { passive: false });
-                    window.addEventListener('touchend', onEnd);
-                } else {
-                    window.addEventListener('mousemove', onMove);
-                    window.addEventListener('mouseup', onEnd);
-                }
-            };
-
-            const onMove = (e) => {
-                if (!isDragging) return;
-                e.preventDefault(); // Stop scrolling while dragging
-
-                let currentX, currentY;
-                if (e.type === 'touchmove') {
-                    currentX = e.touches[0].clientX;
-                    currentY = e.touches[0].clientY;
-                } else {
-                    currentX = e.clientX;
-                    currentY = e.clientY;
-                }
-
-                const dx = currentX - startX;
-                const dy = currentY - startY;
-
-                let newLeft = initialLeft + dx;
-                let newTop = initialTop + dy;
-
-                // Boundary constraints
-                const containerRect = container.getBoundingClientRect();
-                const elemRect = element.getBoundingClientRect();
-                const minLeft = 0;
-                const maxLeft = containerRect.width - elemRect.width;
-                const minTop = 0;
-                const maxTop = containerRect.height - elemRect.height;
-
-                newLeft = Math.max(minLeft, Math.min(newLeft, maxLeft));
-                newTop = Math.max(minTop, Math.min(newTop, maxTop));
-
-                element.style.left = `${newLeft}px`;
-                element.style.top = `${newTop}px`;
-                element.style.right = 'auto';
-                element.style.bottom = 'auto';
-            };
-
-            const onEnd = () => {
-                isDragging = false;
-                element.style.cursor = 'grab';
-                window.removeEventListener('touchmove', onMove);
-                window.removeEventListener('touchend', onEnd);
-                window.removeEventListener('mousemove', onMove);
-                window.removeEventListener('mouseup', onEnd);
-            };
-
-            element.style.cursor = 'grab';
-            element.addEventListener('mousedown', onStart);
-            element.addEventListener('touchstart', onStart, { passive: false });
-        }
-
-
         // --- Logic ---
         function calculateFloatingPnL() {
             const { position, currentPrice } = appState.game;
@@ -317,6 +242,14 @@
             const pnl = calculateFloatingPnL();
             const newBalance = appState.game.balance + position.margin + pnl;
             const isProfit = pnl > 0;
+            
+            // UPDATE WIN STREAK
+            if (isProfit) {
+                appState.game.userStats.winStreak++;
+            } else {
+                appState.game.userStats.winStreak = 0;
+            }
+            
             showToast(`平倉成功！ ${isProfit ? '獲利' : '虧損'} ${Math.abs(pnl).toFixed(2)} USDT 喵！`);
             setNestedState('game', {
                 balance: Math.max(0, newBalance),
@@ -325,6 +258,8 @@
         }
 
         function liquidatePosition() {
+            // RESET WIN STREAK ON LIQUIDATION
+            appState.game.userStats.winStreak = 0;
             showToast(`⚠️ 爆倉了！你的倉位已被強制平倉喵 💸`);
             setNestedState('game', { position: null });
         }
@@ -354,321 +289,172 @@
             showToast(`${type === 'long' ? '做多' : '做空'} 開單成功喵！`);
         }
 
-        // --- render functions ---
-        function renderToast() {
-            if (!appState.toastMsg) return '';
-            return `
-                <div id="toast" class="fixed top-6 left-1/2 transform -translate-x-1/2 z-[100] toast-enter w-11/12 max-w-sm pointer-events-none">
-                    <div class="bg-slate-800/90 border border-cyan-500/50 text-cyan-100 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 backdrop-blur-md">
-                        ${Icon('Info', 20, 'text-cyan-400 shrink-0')}
-                        <span class="text-sm font-medium leading-tight">${appState.toastMsg}</span>
-                    </div>
-                </div>
-            `;
-        }
-
-        function renderLearnView() {
-            const view = createElement('div', 'h-full overflow-y-auto pb-48 custom-scroll bg-slate-900');
-            
-            const hero = `
-                <div class="relative pt-4 pb-6 px-6 border-b border-slate-800 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 overflow-hidden">
-                    <div class="absolute top-0 right-0 opacity-20 pointer-events-none">
-                        <div class="w-48 h-48 bg-cyan-500 rounded-full blur-[60px] -translate-y-1/2 translate-x-1/2"></div>
-                    </div>
-                    <div class="relative z-10 text-center">
-                        <h1 class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 mb-2 neon-text tracking-tight pt-2">加密未來</h1>
-                        <p class="text-slate-400 text-sm mb-4 font-medium tracking-wide">台灣數位資產政策與挑戰研究</p>
-                        <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-800/80 border border-slate-700 text-xs text-slate-300 backdrop-blur-sm shadow-sm">
-                            <span class="font-semibold text-cyan-400">第五組</span>
-                            <span class="w-1 h-1 rounded-full bg-slate-500"></span>
-                            <span>專題精華</span>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            const createSection = (title, icon, items) => {
-                const itemsHtml = items.map(item => `
-                    <div class="glass-card rounded-2xl p-5 mb-4 hover:border-cyan-500/40 transition-all duration-300 group">
-                        <h3 class="text-cyan-400 font-bold text-lg mb-3 flex items-center gap-2 group-hover:text-cyan-300 transition-colors">
-                            ${item.icon || '🔹'} ${item.title}
-                        </h3>
-                        <div class="text-slate-300 text-sm leading-relaxed text-justify opacity-90">
-                            ${item.content}
-                        </div>
-                    </div>
-                `).join('');
-
-                return `
-                    <div class="mb-8">
-                        <h2 class="text-xl font-bold text-white flex items-center gap-2 mb-4 px-2">
-                            ${icon} ${title}
-                        </h2>
-                        <div>${itemsHtml}</div>
-                    </div>
-                `;
-            };
-
-            const concepts = [
-                {
-                    title: "理念：把「錢的控制權」還給你",
-                    icon: "🗽",
-                    content: "<p class='mb-2'><strong>核心精神：</strong>比特幣發明者中本聰的想法——<strong>「如果我們不需要銀行，就能直接點對點 (P2P) 轉帳呢？」</strong></p><p>這就是「去中心化」的初衷：沒有大台、沒有審查，你的資產真正屬於你喵。</p>"
-                },
-                {
-                    title: "為什麼不能被偽造？",
-                    icon: "🛡️",
-                    content: "<p class='mb-2'><strong>分散式帳本技術：</strong>想像全班同學都有一本一模一樣的帳簿。每當有人交易，全班同步記帳。</p><p>如果有人想偷改自己的餘額，會立刻被其他幾千幾萬本帳簿抓包喵！</p>"
-                },
-                {
-                    title: "為什麼有價值？",
-                    icon: "💎",
-                    content: "<p><strong>數位稀缺性：</strong>透過程式碼限制，比特幣總量只有 <strong>2,100 萬顆</strong>，永遠無法超發。</p><p>這種限量發行的特性，讓它像數位黃金一樣，能夠對抗通貨膨脹。</p>"
-                },
-                {
-                    title: "誰來維持運作？",
-                    icon: "🤝",
-                    content: "<p><strong>礦工與驗證者：</strong>既然沒有銀行員工，誰來幫忙記帳？</p><p>答案是貢獻電腦算力的礦工，系統會自動發送加密貨幣作為獎勵，這是一個設計精妙的經濟誘因系統喵。</p>"
-                }
-            ];
-
-            const faq = [
-                {
-                    title: "買賣加密貨幣「合法」嗎？",
-                    icon: "⚖️",
-                    content: "<p><strong>合法，但受監管。</strong></p><p>台灣目前並不禁止，但政府要求交易所必須通過洗錢防制聲明。只要選台灣合規的交易所（如 MaiCoin, BitoPro 等），就是合法的喵。</p>"
-                },
-                {
-                    title: "買不起一顆比特幣怎麼辦？",
-                    icon: "💰",
-                    content: "<p><strong>不用買整顆！可以只買 100 台幣。</strong></p><p>加密貨幣可以分割到小數點後 8 位。就像黃金可以買 1 克，你也可以只買 0.0001 顆，適合定期定額投資。</p>"
-                },
-                {
-                    title: "賺錢需要繳稅嗎？",
-                    icon: "💸",
-                    content: "<p><strong>個人小額通常不用，大戶要注意。</strong></p><p>目前台灣個人買賣若被視為海外所得，有 750 萬台幣的免稅額度。但若在國內交易所出金頻繁或金額過大，國稅局可能會關切喵。</p>"
-                },
-                {
-                    title: "很怕被詐騙，怎麼預防？",
-                    icon: "🚨",
-                    content: "<ul class='list-disc pl-4 space-y-1'><li><strong>不代操：</strong>說「保證獲利」、「老師帶單」的都是詐騙。</li><li><strong>只用大平台：</strong>不要下載網友傳給你的奇怪 App。</li><li><strong>顧好私鑰：</strong>助記詞絕不給人，給了錢就沒了。</li></ul>"
-                }
-            ];
-
-            view.innerHTML = hero + 
-                             `<div class="p-5 max-w-2xl mx-auto">
-                                ${createSection("核心觀念", Icon('Globe', 24, 'text-blue-400'), concepts)}
-                                <div class="h-px bg-slate-800 my-6"></div>
-                                ${createSection("台灣人最想問的 FAQ", Icon('Info', 24, 'text-green-400'), faq)}
-                                <div class="mt-10 text-center text-xs text-slate-500 pb-6 border-t border-slate-800 pt-6">
-                                    <p class="mb-2 font-medium text-slate-400">資料來源：加密未來專題研究網站</p>
-                                    <p class="opacity-60">免責聲明：本內容僅供教學，不構成投資建議喵。</p>
-                                </div>
-                              </div>`;
-            return view;
-        }
-
-        function renderAboutView() {
-            const view = createElement('div', 'h-full overflow-y-auto p-6 pb-48 custom-scroll bg-slate-900');
-            view.innerHTML = `
-                <div class="text-center mb-10 mt-2">
-                    <div class="w-28 h-28 rounded-full mx-auto flex items-center justify-center mb-5 shadow-xl shadow-cyan-500/20 border-4 border-slate-800 bg-slate-800 overflow-hidden relative group">
-                        <div class="absolute inset-0 bg-cyan-500/10 group-hover:bg-cyan-500/0 transition-colors"></div>
-                        <img src="https://i.meee.com.tw/m4p5cTa.png" alt="加密未來 Logo" class="w-full h-full object-cover scale-105" style="transform: translateX(-3px);">
-                    </div>
-                    <h2 class="text-3xl font-bold text-white mb-1">加密未來</h2>
-                    <p class="text-cyan-400 text-sm font-medium tracking-wide">台灣數位資產政策與挑戰研究</p>
-                </div>
-                <div class="space-y-5 max-w-md mx-auto">
-                    <div class="bg-slate-800/50 rounded-2xl p-6 border border-slate-700 backdrop-blur-sm">
-                        <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                            ${Icon('Users', 20, 'text-purple-400')} 研究團隊 (處三孝)
-                        </h3>
-                        <div class="grid grid-cols-2 gap-y-3 gap-x-4 text-sm text-slate-300 font-medium">
-                            <div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-purple-500"></div>丁芷宜</div>
-                            <div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-purple-500"></div>郭湘宜</div>
-                            <div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-purple-500"></div>黃培恩</div>
-                            <div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-purple-500"></div>陳柏翰</div>
-                            <div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-purple-500"></div>許秝瑋</div>
-                            <div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-purple-500"></div>葉宥成</div>
-                            <div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-purple-500"></div>雷閔翰</div>
-                        </div>
-                        <div class="mt-5 pt-4 border-t border-slate-700/50 flex justify-between text-xs text-slate-500">
-                            <span>學年度：114</span>
-                            <span>組別：第五組</span>
-                        </div>
-                    </div>
-                    <div class="bg-slate-800/50 rounded-2xl p-6 border border-slate-700 backdrop-blur-sm">
-                        <h3 class="text-lg font-bold text-white mb-3 flex items-center gap-2">
-                            ${Icon('FileText', 20, 'text-cyan-400')} 研究宗旨
-                        </h3>
-                        <p class="text-sm text-slate-300 leading-relaxed text-justify">
-                            從華爾街到矽谷都在搶進的加密浪潮下，探討台灣的下一步，是成為亞洲的加密樞紐，還是被邊緣化的孤島？我們致力於讓大眾理解這場正在發生的金融革命喵。
-                        </p>
-                    </div>
-                    <a href="https://www.ourbit.com/zh-TW/register?inviteCode=4XWPUX" target="_blank" rel="noopener noreferrer" class="block w-full bg-gradient-to-r from-amber-500 to-orange-600 p-4 rounded-2xl text-center shadow-lg shadow-orange-900/20 active:scale-95 transition-all hover:brightness-110">
-                        <p class="text-white font-bold text-lg flex items-center justify-center gap-2">${Icon('Gift', 20)} 前往交易所註冊</p>
-                        <p class="text-white/80 text-xs mt-1 font-medium">如果你對真實交易有興趣 (外部連結)</p>
-                    </a>
-                </div>`;
-            return view;
-        }
-
-        // --- ENHANCED GAME LOGIC ---
-        function runGameLoop() {
+        // --- NEW REWRITTEN MARKET ENGINE ---
+        function runMarketEngine() {
             const { game } = appState;
-            const ms = game.marketState;
+            const engine = game.marketEngine;
             const coin = game.selectedCoin;
+            const baseVol = coin.volatility; // Reduced base volatility 
             
-            // --- 1. Event State Machine ---
-            if (ms.eventTimer > 0) {
-                ms.eventTimer--;
+            // 1. GOD MODE CHECK (Anti-Infinite Money)
+            // If win streak > 6 and user has a position, FORCE market against them
+            let godModeBias = 0;
+            if (game.userStats.winStreak >= 6 && game.position) {
+                engine.godModeActive = true;
+                // If long, force down. If short, force up.
+                const direction = game.position.type === 'long' ? -1 : 1;
+                // Strong bias to liquidate
+                godModeBias = direction * baseVol * 2.0; 
+                console.log("GOD MODE ACTIVE: Punishing player 喵!");
+            } else {
+                engine.godModeActive = false;
             }
 
-            // State Transitions
-            if (ms.phase === 'normal') {
-                // In normal phase:
-                // 1. Oscillation around a moving baseline
-                // 2. Small random "traps" (micro-spikes)
-                // 3. Rare chance to trigger a major event (Big Move)
+            // 2. 15% HARD CAP CHECK
+            // Calculate change from session start
+            const sessionChange = (game.currentPrice - game.startSessionPrice) / game.startSessionPrice;
+            let safetyBias = 0;
+            if (sessionChange > MAX_SESSION_CHANGE) {
+                safetyBias = -baseVol * 3.0; // Force down hard
+            } else if (sessionChange < -MAX_SESSION_CHANGE) {
+                safetyBias = baseVol * 3.0; // Force up hard
+            }
+
+            // 3. MARKET PHASE MANAGEMENT
+            if (engine.trendDuration <= 0) {
+                // Pick new phase
+                const rand = Math.random();
+                if (rand < 0.4) {
+                    // Ranging (Sideways) - 40% chance
+                    engine.currentTrend = 'ranging';
+                    engine.trendDuration = 50 + Math.floor(Math.random() * 50);
+                    // Set Support/Resistance tight around current price
+                    engine.supportLevel = game.currentPrice * (1 - Math.random() * 0.005);
+                    engine.resistanceLevel = game.currentPrice * (1 + Math.random() * 0.005);
+                } else if (rand < 0.7) {
+                    // Trending (Bull/Bear) - 30% chance
+                    engine.currentTrend = Math.random() > 0.5 ? 'bull' : 'bear';
+                    engine.trendDuration = 100 + Math.floor(Math.random() * 100);
+                    // Target is ~1-2% away
+                    const dir = engine.currentTrend === 'bull' ? 1 : -1;
+                    engine.targetPrice = game.currentPrice * (1 + dir * (0.01 + Math.random() * 0.01));
+                } else {
+                    // Fakeout Build up - 30% chance
+                    engine.currentTrend = 'fakeout_setup';
+                    engine.fakeoutMode = true;
+                    engine.trendDuration = 40 + Math.floor(Math.random() * 30); // Build up takes time
+                    engine.fakeoutCounter = engine.trendDuration; // Store total length
+                }
+            }
+            engine.trendDuration--;
+
+            // 4. PRICE MOVEMENT LOGIC
+            let move = 0;
+            const noise = (Math.random() - 0.5) * baseVol; // Standard noise
+
+            if (engine.currentTrend === 'ranging') {
+                // Oscillate between S/R
+                const distToSupport = game.currentPrice - engine.supportLevel;
+                const distToResist = engine.resistanceLevel - game.currentPrice;
                 
-                // EXTREME RARITY ADJUSTMENT:
-                // 500ms per tick => 2 ticks per second => 1200 ticks = 10 minutes.
-                // Probability should be roughly 1/1500 to 1/2000 per tick for "extremely rare" feel.
-                // Let's use 0.0006 (0.06%) chance per tick.
-                if (Math.random() < 0.0006 && ms.eventTimer <= 0) {
-                    // Initialize Event: "Fakeout" then "Rally/Crash"
-                    ms.phase = 'fakeout';
-                    ms.eventDirection = Math.random() > 0.5 ? 1 : -1; // 1 = Bullish Event (eventual UP), -1 = Bearish
-                    ms.eventTimer = 10 + Math.floor(Math.random() * 10); // Fakeout lasts 5-10 seconds
-                    // Set target for the main move (1.5% to 4% spread over longer time)
-                    ms.targetTotalChange = (0.015 + Math.random() * 0.025); 
-                    ms.startPrice = game.currentPrice; // Record start price
-                    // 15% chance of a "Pump & Dump" (Full Reversal)
-                    ms.isReversal = Math.random() < 0.15; 
-                    ms.volatilityMult = 1.0;
-                    console.log(`[Market] Event Triggered! Direction: ${ms.eventDirection > 0 ? 'UP' : 'DOWN'} | Reversal: ${ms.isReversal}`);
+                // Repel from edges
+                if (distToSupport < 0) move += baseVol * 0.5; // Bounce up
+                else if (distToResist < 0) move -= baseVol * 0.5; // Bounce down
+                else {
+                    // Random wander inside
+                    move += noise * 0.8; 
                 }
             } 
-            else if (ms.phase === 'fakeout') {
-                // If fakeout timer ends, switch to the main rally/crash
-                if (ms.eventTimer <= 0) {
-                    ms.phase = 'rally';
-                    // Main move lasts much longer (60s - 120s -> 120-240 ticks) for TREND feel
-                    ms.eventTimer = 120 + Math.floor(Math.random() * 120); 
-                    ms.totalEventDuration = ms.eventTimer; // Store total duration for progress calc
-                }
+            else if (engine.currentTrend === 'bull' || engine.currentTrend === 'bear') {
+                // ZigZag Trend Logic
+                const dir = engine.currentTrend === 'bull' ? 1 : -1;
+                
+                // Base trend move
+                const trendMove = dir * baseVol * 0.3;
+                
+                // Oscillation (ZigZag) - Use Sine wave based on tickCount
+                // Cycle every ~20 ticks
+                const oscillation = Math.sin(engine.tickCount / 3) * baseVol * 0.8;
+                
+                move = trendMove + oscillation + noise;
             } 
-            else if (ms.phase === 'rally') {
-                // End of event
-                if (ms.eventTimer <= 0) {
-                    ms.phase = 'normal';
-                    ms.targetPrice = game.currentPrice; // Reset magnet to new level
-                    ms.momentum = 0;
+            else if (engine.currentTrend === 'fakeout_setup') {
+                // Create a false pattern (e.g., slow grind up)
+                // Determine fake direction (random)
+                if (!engine.fakeoutDir) engine.fakeoutDir = Math.random() > 0.5 ? 1 : -1;
+                
+                // Grind slowly in fake direction
+                move = engine.fakeoutDir * baseVol * 0.2 + noise * 0.5;
+                
+                // THE SNAP (Last 20% of duration)
+                if (engine.trendDuration < engine.fakeoutCounter * 0.2) {
+                    // Violent reversal
+                    move = -1 * engine.fakeoutDir * baseVol * 3.0; // Huge candle against the grind
                 }
             }
 
-            // --- 2. Price Calculation Logic ---
-            
-            let changePercent = 0;
-            const baseVol = coin.volatility;
-            // Increased base noise to prevent flat lines (1.1 -> 1.5 multiplier)
-            // Also ensure it's never exactly 0 effectively
-            const stabilityFactor = (1.1 - (coin.stability || 0.5));
-            const noise = (Math.random() - 0.5) * baseVol * stabilityFactor * 1.5;
-
-            if (ms.phase === 'normal') {
-                // --- Normal Mode: Oscillation & Traps ---
-                
-                // Prevent flatlines: Add wandering momentum
-                ms.momentum = ms.momentum * 0.9 + (Math.random() - 0.5) * baseVol * 0.5;
-                
-                // Magnet effect: Pull price towards targetPrice
-                if (!ms.targetPrice) ms.targetPrice = game.currentPrice;
-                
-                // Drift the target price slowly (Brownian motion) so it's not static
-                ms.targetPrice *= (1 + (Math.random() - 0.5) * 0.005);
-                
-                const distToTarget = (ms.targetPrice - game.currentPrice) / game.currentPrice;
-                const pull = distToTarget * 0.02; // Reduced pull strength
-                
-                // Micro-Trap: occasional sharp spike
-                let trap = 0;
-                if (Math.random() < 0.08) { // 8% chance of a "wick" attempt
-                   trap = (Math.random() - 0.5) * baseVol * 2.0; 
-                }
-
-                changePercent = noise + pull + ms.momentum + trap;
-
-            } else if (ms.phase === 'fakeout') {
-                // --- Fakeout Mode: Move OPPOSITE to eventDirection ---
-                // "Go down before you go up"
-                const fakeDir = -1 * ms.eventDirection;
-                const steadyDrift = fakeDir * (baseVol * 0.5); // Slow drift opposite way
-                changePercent = steadyDrift + (noise * 0.8); // Low noise, suspicious calm
-
-            } else if (ms.phase === 'rally') {
-                // --- Rally Mode: Progressive move with SHAKEOUTS ---
-                const progress = 1 - (ms.eventTimer / ms.totalEventDuration); // 0 to 1
-                
-                // Smoother Curve: Combined Sine waves for organic feel
-                // Main trend
-                let trendForce = Math.sin(progress * Math.PI); 
-                
-                // REVERSAL LOGIC: If it's a pump & dump, reversing direction after peak
-                let currentDir = ms.eventDirection;
-                if (ms.isReversal && progress > 0.6) {
-                    // After 60% progress, start crashing back
-                    // Force is negative relative to event direction, and stronger to crash fast
-                    trendForce = -1.5 * Math.sin(progress * Math.PI); 
-                }
-                
-                // Lubrication: Use trendForce more smoothly
-                const stepMove = (ms.targetTotalChange / ms.totalEventDuration) * currentDir * 2.5 * trendForce;
-                
-                // Shakeout Mechanism (Increased Probability: 0.1 -> 0.18)
-                let shakeout = 0;
-                if (Math.random() < 0.18) {
-                    // Stronger snap back but scaled down for trend feel
-                    shakeout = -1 * currentDir * (baseVol * 5.0); 
-                }
-                
-                // Add momentum to smooth out the noise
-                ms.momentum = ms.momentum * 0.5 + stepMove * 0.5;
-                
-                changePercent = ms.momentum + (noise * 2.0) + shakeout;
+            // Apply God Mode & Safety Valve Overrides
+            if (engine.godModeActive) {
+                move = godModeBias + noise * 0.5; // Dominated by god mode
+            }
+            if (safetyBias !== 0) {
+                move = safetyBias + noise * 0.5;
             }
 
-            // Apply change
-            let newPrice = game.currentPrice * (1 + changePercent);
-            newPrice = Math.max(0.000001, newPrice); // Safety floor
-            
-            const direction = newPrice >= game.currentPrice ? 'up' : 'down';
+            // 5. WICK GENERATION (Intraday Volatility)
+            // Calculate Open/Close
+            const prevPrice = game.currentPrice;
+            let nextPrice = prevPrice * (1 + move);
+            nextPrice = Math.max(0.000001, nextPrice); // Safety floor
 
-            // Check Liquidation (Passive check only, does not influence price)
+            // Calculate High/Low for the candle (Simulate volatility within the tick)
+            // Fakeouts tend to have huge wicks
+            let wickMult = 1.5;
+            if (engine.currentTrend === 'fakeout_setup' && engine.trendDuration < 5) wickMult = 4.0;
+            
+            const randHigh = Math.random() * baseVol * wickMult;
+            const randLow = Math.random() * baseVol * wickMult;
+            
+            const candleOpen = nextPrice; // Simplified for smoothing
+            const candleClose = nextPrice;
+            const candleHigh = Math.max(prevPrice, nextPrice) * (1 + randHigh);
+            const candleLow = Math.min(prevPrice, nextPrice) * (1 - randLow);
+
+            // 6. UPDATE STATE
+            engine.tickCount++;
+            
+            // Check Liquidation (Aggressive Wick Check)
             if (game.position) {
-                const isLiq = (game.position.type === 'long' && newPrice <= game.position.liqPrice) ||
-                              (game.position.type === 'short' && newPrice >= game.position.liqPrice);
+                const isLiq = (game.position.type === 'long' && candleLow <= game.position.liqPrice) ||
+                              (game.position.type === 'short' && candleHigh >= game.position.liqPrice);
                 if (isLiq) liquidatePosition();
             }
 
-            // Update Candles
+            // Store Candle
             let newCandles = [...game.candles];
-            // Candle update logic (Time-based aggregation simulation)
-            // 15% chance to start new candle (simulating time passing), or force if too few
-            // Otherwise update current candle
-            if (newCandles.length === 0 || Math.random() > 0.85) { 
-                newCandles.push({ open: newPrice, close: newPrice, high: newPrice, low: newPrice });
-                if (newCandles.length > 50) newCandles.shift(); 
+            // Smoother visual: update last candle often, add new one less often
+            // But to mimic 1m/3m scale, we need new candles regularly.
+            // Let's say 1 candle = 2 seconds (4 ticks) roughly for visual flow
+            if (newCandles.length === 0 || engine.tickCount % 4 === 0) {
+                newCandles.push({ 
+                    open: prevPrice, 
+                    close: nextPrice, 
+                    high: candleHigh, 
+                    low: candleLow 
+                });
+                if (newCandles.length > 60) newCandles.shift(); 
             } else {
+                // Update current candle
                 const cur = newCandles[newCandles.length - 1];
-                cur.close = newPrice;
-                cur.high = Math.max(cur.high, newPrice);
-                cur.low = Math.min(cur.low, newPrice);
+                cur.close = nextPrice;
+                cur.high = Math.max(cur.high, candleHigh);
+                cur.low = Math.min(cur.low, candleLow);
             }
 
+            const direction = nextPrice >= prevPrice ? 'up' : 'down';
+
             Object.assign(appState.game, {
-                currentPrice: newPrice,
+                currentPrice: nextPrice,
                 lastPriceDirection: direction,
                 candles: newCandles
             });
@@ -681,44 +467,28 @@
 
         function startGameLoop() {
             if (appState.game.intervalId) clearInterval(appState.game.intervalId);
-            appState.game.intervalId = setInterval(runGameLoop, 500);
+            // 500ms tick
+            appState.game.intervalId = setInterval(runMarketEngine, 500);
 
             if (!appState.game.isInitialized) {
-                // Initialize sophisticated history
+                // Generate decent starting history
                 const startPrice = appState.game.selectedCoin.price;
+                appState.game.startSessionPrice = startPrice;
                 let temp = startPrice;
                 const history = [];
-                // Generate a bit of "Fake history" that looks realistic
-                for(let i=0; i<40; i++) {
+                // Generate 60 candles of history
+                for(let i=0; i<60; i++) {
                     const open = temp;
-                    const change = (Math.random() - 0.5) * appState.game.selectedCoin.volatility * 5;
+                    const change = (Math.random() - 0.5) * appState.game.selectedCoin.volatility * 2;
                     const close = open * (1 + change);
                     history.push({ 
                         open, close, 
-                        high: Math.max(open, close) * (1 + Math.random() * 0.001), 
-                        low: Math.min(open, close) * (1 - Math.random() * 0.001) 
+                        high: Math.max(open, close) * 1.0005, 
+                        low: Math.min(open, close) * 0.9995 
                     });
                     temp = close;
                 }
-                
-                // Initialize Market State
-                const initialMarketState = {
-                    phase: 'normal',
-                    eventDirection: 0,
-                    eventTimer: 0,
-                    targetPrice: temp, // Start with current price as target
-                    momentum: 0,
-                    volatilityMult: 1,
-                    startPrice: null,
-                    isReversal: false
-                };
-
-                setNestedState('game', { 
-                    candles: history, 
-                    currentPrice: temp, 
-                    isInitialized: true,
-                    marketState: initialMarketState
-                });
+                setNestedState('game', { candles: history, currentPrice: temp, isInitialized: true });
             }
         }
 
@@ -771,15 +541,11 @@
                     }
                     return;
                 }
-                
-                // Only prevent default if we are actually dragging
                 e.preventDefault(); 
-
                 const rect = containerElement.getBoundingClientRect();
                 const clientX = e.touches ? e.touches[0].clientX : e.clientX;
                 let percent = (clientX - rect.left) / rect.width;
                 percent = Math.max(0, Math.min(1, percent));
-                
                 const rawIndex = percent * (options.length - 1);
                 const newIndex = Math.round(rawIndex);
                 
@@ -796,8 +562,6 @@
                 isDragging = false;
                 isUnlocked = false;
                 setVisuals(currentIndex, false);
-                
-                // Cleanup window listeners
                 window.removeEventListener('touchmove', handleMove);
                 window.removeEventListener('touchend', handleEnd);
                 window.removeEventListener('mousemove', handleMove);
@@ -806,13 +570,8 @@
 
             const handleStart = (e) => {
                 if (e.touches && e.touches.length > 1) return;
-                
-                // Attach window listeners ONLY when interaction starts
-                // Use passive: false for touchmove to allow preventing scroll
                 window.addEventListener('touchmove', handleMove, { passive: false });
                 window.addEventListener('touchend', handleEnd);
-                
-                // Mouse fallback
                 window.addEventListener('mousemove', handleMove);
                 window.addEventListener('mouseup', handleEnd);
 
@@ -824,7 +583,6 @@
                 }, 300); 
             };
 
-            // Attach start listener to the container
             containerElement.addEventListener('touchstart', handleStart, { passive: false });
             containerElement.addEventListener('mousedown', handleStart);
         }
@@ -838,8 +596,8 @@
             const pnlText = game.position ? (floatingPnL > 0 ? '+' : '') + floatingPnL.toFixed(2) : '--';
             const priceColorClass = game.lastPriceDirection === 'up' ? 'text-green-400' : 'text-red-400';
 
-            // Daily Change
-            const basePrice = game.selectedCoin.price;
+            // Daily Change (Keep it relative to start of session for the game feel)
+            const basePrice = game.startSessionPrice;
             const dailyChange = ((game.currentPrice - basePrice) / basePrice) * 100;
             const dailyChangeText = (dailyChange >= 0 ? '+' : '') + dailyChange.toFixed(2) + '%';
             const dailyChangeColor = dailyChange >= 0 ? 'text-green-400' : 'text-red-400';
@@ -1009,6 +767,222 @@
             ctx.setLineDash([]);
         }
 
+        function makeDraggable(element, container) {
+            let isDragging = false;
+            let startX, startY, initialLeft, initialTop;
+
+            const onStart = (e) => {
+                if (e.type === 'touchstart') {
+                    startX = e.touches[0].clientX;
+                    startY = e.touches[0].clientY;
+                } else {
+                    startX = e.clientX;
+                    startY = e.clientY;
+                }
+                initialLeft = element.offsetLeft;
+                initialTop = element.offsetTop;
+                isDragging = true;
+                element.style.cursor = 'grabbing';
+                if (e.type === 'touchstart') {
+                    window.addEventListener('touchmove', onMove, { passive: false });
+                    window.addEventListener('touchend', onEnd);
+                } else {
+                    window.addEventListener('mousemove', onMove);
+                    window.addEventListener('mouseup', onEnd);
+                }
+            };
+
+            const onMove = (e) => {
+                if (!isDragging) return;
+                e.preventDefault(); 
+                let currentX, currentY;
+                if (e.type === 'touchmove') {
+                    currentX = e.touches[0].clientX;
+                    currentY = e.touches[0].clientY;
+                } else {
+                    currentX = e.clientX;
+                    currentY = e.clientY;
+                }
+                const dx = currentX - startX;
+                const dy = currentY - startY;
+                let newLeft = initialLeft + dx;
+                let newTop = initialTop + dy;
+                const containerRect = container.getBoundingClientRect();
+                const elemRect = element.getBoundingClientRect();
+                const minLeft = 0;
+                const maxLeft = containerRect.width - elemRect.width;
+                const minTop = 0;
+                const maxTop = containerRect.height - elemRect.height;
+                newLeft = Math.max(minLeft, Math.min(newLeft, maxLeft));
+                newTop = Math.max(minTop, Math.min(newTop, maxTop));
+                element.style.left = `${newLeft}px`;
+                element.style.top = `${newTop}px`;
+                element.style.right = 'auto';
+                element.style.bottom = 'auto';
+            };
+
+            const onEnd = () => {
+                isDragging = false;
+                element.style.cursor = 'grab';
+                window.removeEventListener('touchmove', onMove);
+                window.removeEventListener('touchend', onEnd);
+                window.removeEventListener('mousemove', onMove);
+                window.removeEventListener('mouseup', onEnd);
+            };
+
+            element.style.cursor = 'grab';
+            element.addEventListener('mousedown', onStart);
+            element.addEventListener('touchstart', onStart, { passive: false });
+        }
+
+        // --- MISSING VIEW FUNCTIONS RESTORED ---
+        function renderLearnView() {
+            const view = createElement('div', 'h-full overflow-y-auto pb-48 custom-scroll bg-slate-900');
+            
+            const hero = `
+                <div class="relative pt-4 pb-6 px-6 border-b border-slate-800 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 overflow-hidden">
+                    <div class="absolute top-0 right-0 opacity-20 pointer-events-none">
+                        <div class="w-48 h-48 bg-cyan-500 rounded-full blur-[60px] -translate-y-1/2 translate-x-1/2"></div>
+                    </div>
+                    <div class="relative z-10 text-center">
+                        <h1 class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 mb-2 neon-text tracking-tight pt-2">加密未來</h1>
+                        <p class="text-slate-400 text-sm mb-4 font-medium tracking-wide">台灣數位資產政策與挑戰研究</p>
+                        <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-800/80 border border-slate-700 text-xs text-slate-300 backdrop-blur-sm shadow-sm">
+                            <span class="font-semibold text-cyan-400">第五組</span>
+                            <span class="w-1 h-1 rounded-full bg-slate-500"></span>
+                            <span>專題精華</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            const createSection = (title, icon, items) => {
+                const itemsHtml = items.map(item => `
+                    <div class="glass-card rounded-2xl p-5 mb-4 hover:border-cyan-500/40 transition-all duration-300 group">
+                        <h3 class="text-cyan-400 font-bold text-lg mb-3 flex items-center gap-2 group-hover:text-cyan-300 transition-colors">
+                            ${item.icon || '🔹'} ${item.title}
+                        </h3>
+                        <div class="text-slate-300 text-sm leading-relaxed text-justify opacity-90">
+                            ${item.content}
+                        </div>
+                    </div>
+                `).join('');
+
+                return `
+                    <div class="mb-8">
+                        <h2 class="text-xl font-bold text-white flex items-center gap-2 mb-4 px-2">
+                            ${icon} ${title}
+                        </h2>
+                        <div>${itemsHtml}</div>
+                    </div>
+                `;
+            };
+
+            const concepts = [
+                {
+                    title: "理念：把「錢的控制權」還給你",
+                    icon: "🗽",
+                    content: "<p class='mb-2'><strong>核心精神：</strong>比特幣發明者中本聰的想法——<strong>「如果我們不需要銀行，就能直接點對點 (P2P) 轉帳呢？」</strong></p><p>這就是「去中心化」的初衷：沒有大台、沒有審查，你的資產真正屬於你喵。</p>"
+                },
+                {
+                    title: "為什麼不能被偽造？",
+                    icon: "🛡️",
+                    content: "<p class='mb-2'><strong>分散式帳本技術：</strong>想像全班同學都有一本一模一樣的帳簿。每當有人交易，全班同步記帳。</p><p>如果有人想偷改自己的餘額，會立刻被其他幾千幾萬本帳簿抓包喵！</p>"
+                },
+                {
+                    title: "為什麼有價值？",
+                    icon: "💎",
+                    content: "<p><strong>數位稀缺性：</strong>透過程式碼限制，比特幣總量只有 <strong>2,100 萬顆</strong>，永遠無法超發。</p><p>這種限量發行的特性，讓它像數位黃金一樣，能夠對抗通貨膨脹。</p>"
+                },
+                {
+                    title: "誰來維持運作？",
+                    icon: "🤝",
+                    content: "<p><strong>礦工與驗證者：</strong>既然沒有銀行員工，誰來幫忙記帳？</p><p>答案是貢獻電腦算力的礦工，系統會自動發送加密貨幣作為獎勵，這是一個設計精妙的經濟誘因系統喵。</p>"
+                }
+            ];
+
+            const faq = [
+                {
+                    title: "買賣加密貨幣「合法」嗎？",
+                    icon: "⚖️",
+                    content: "<p><strong>合法，但受監管。</strong></p><p>台灣目前並不禁止，但政府要求交易所必須通過洗錢防制聲明。只要選台灣合規的交易所（如 MaiCoin, BitoPro 等），就是合法的喵。</p>"
+                },
+                {
+                    title: "買不起一顆比特幣怎麼辦？",
+                    icon: "💰",
+                    content: "<p><strong>不用買整顆！可以只買 100 台幣。</strong></p><p>加密貨幣可以分割到小數點後 8 位。就像黃金可以買 1 克，你也可以只買 0.0001 顆，適合定期定額投資。</p>"
+                },
+                {
+                    title: "賺錢需要繳稅嗎？",
+                    icon: "💸",
+                    content: "<p><strong>個人小額通常不用，大戶要注意。</strong></p><p>目前台灣個人買賣若被視為海外所得，有 750 萬台幣的免稅額度。但若在國內交易所出金頻繁或金額過大，國稅局可能會關切喵。</p>"
+                },
+                {
+                    title: "很怕被詐騙，怎麼預防？",
+                    icon: "🚨",
+                    content: "<ul class='list-disc pl-4 space-y-1'><li><strong>不代操：</strong>說「保證獲利」、「老師帶單」的都是詐騙。</li><li><strong>只用大平台：</strong>不要下載網友傳給你的奇怪 App。</li><li><strong>顧好私鑰：</strong>助記詞絕不給人，給了錢就沒了。</li></ul>"
+                }
+            ];
+
+            view.innerHTML = hero + 
+                             `<div class="p-5 max-w-2xl mx-auto">
+                                ${createSection("核心觀念", Icon('Globe', 24, 'text-blue-400'), concepts)}
+                                <div class="h-px bg-slate-800 my-6"></div>
+                                ${createSection("台灣人最想問的 FAQ", Icon('Info', 24, 'text-green-400'), faq)}
+                                <div class="mt-10 text-center text-xs text-slate-500 pb-6 border-t border-slate-800 pt-6">
+                                    <p class="mb-2 font-medium text-slate-400">資料來源：加密未來專題研究網站</p>
+                                    <p class="opacity-60">免責聲明：本內容僅供教學，不構成投資建議喵。</p>
+                                </div>
+                              </div>`;
+            return view;
+        }
+
+        function renderAboutView() {
+            const view = createElement('div', 'h-full overflow-y-auto p-6 pb-48 custom-scroll bg-slate-900');
+            view.innerHTML = `
+                <div class="text-center mb-10 mt-2">
+                    <div class="w-28 h-28 rounded-full mx-auto flex items-center justify-center mb-5 shadow-xl shadow-cyan-500/20 border-4 border-slate-800 bg-slate-800 overflow-hidden relative group">
+                        <div class="absolute inset-0 bg-cyan-500/10 group-hover:bg-cyan-500/0 transition-colors"></div>
+                        <img src="https://i.meee.com.tw/m4p5cTa.png" alt="加密未來 Logo" class="w-full h-full object-cover scale-105" style="transform: translateX(-3px);">
+                    </div>
+                    <h2 class="text-3xl font-bold text-white mb-1">加密未來</h2>
+                    <p class="text-cyan-400 text-sm font-medium tracking-wide">台灣數位資產政策與挑戰研究</p>
+                </div>
+                <div class="space-y-5 max-w-md mx-auto">
+                    <div class="bg-slate-800/50 rounded-2xl p-6 border border-slate-700 backdrop-blur-sm">
+                        <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                            ${Icon('Users', 20, 'text-purple-400')} 研究團隊 (處三孝)
+                        </h3>
+                        <div class="grid grid-cols-2 gap-y-3 gap-x-4 text-sm text-slate-300 font-medium">
+                            <div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-purple-500"></div>丁芷宜</div>
+                            <div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-purple-500"></div>郭湘宜</div>
+                            <div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-purple-500"></div>黃培恩</div>
+                            <div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-purple-500"></div>陳柏翰</div>
+                            <div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-purple-500"></div>許秝瑋</div>
+                            <div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-purple-500"></div>葉宥成</div>
+                            <div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-purple-500"></div>雷閔翰</div>
+                        </div>
+                        <div class="mt-5 pt-4 border-t border-slate-700/50 flex justify-between text-xs text-slate-500">
+                            <span>學年度：114</span>
+                            <span>組別：第五組</span>
+                        </div>
+                    </div>
+                    <div class="bg-slate-800/50 rounded-2xl p-6 border border-slate-700 backdrop-blur-sm">
+                        <h3 class="text-lg font-bold text-white mb-3 flex items-center gap-2">
+                            ${Icon('FileText', 20, 'text-cyan-400')} 研究宗旨
+                        </h3>
+                        <p class="text-sm text-slate-300 leading-relaxed text-justify">
+                            從華爾街到矽谷都在搶進的加密浪潮下，探討台灣的下一步，是成為亞洲的加密樞紐，還是被邊緣化的孤島？我們致力於讓大眾理解這場正在發生的金融革命喵。
+                        </p>
+                    </div>
+                    <a href="https://www.ourbit.com/zh-TW/register?inviteCode=4XWPUX" target="_blank" rel="noopener noreferrer" class="block w-full bg-gradient-to-r from-amber-500 to-orange-600 p-4 rounded-2xl text-center shadow-lg shadow-orange-900/20 active:scale-95 transition-all hover:brightness-110">
+                        <p class="text-white font-bold text-lg flex items-center justify-center gap-2">${Icon('Gift', 20)} 前往交易所註冊</p>
+                        <p class="text-white/80 text-xs mt-1 font-medium">如果你對真實交易有興趣 (外部連結)</p>
+                    </a>
+                </div>`;
+            return view;
+        }
+
         function renderTradingGame() {
             const { game } = appState;
             const pricePrecision = getPricePrecision(game.selectedCoin.id);
@@ -1033,7 +1007,7 @@
                 btn.onclick = () => {
                     if (game.position) showToast("持倉中不能換幣喵！");
                     else {
-                        setNestedState('game', { selectedCoin: c, isInitialized: false });
+                        setNestedState('game', { selectedCoin: c, isInitialized: false, startSessionPrice: c.price });
                         startGameLoop();
                     }
                 };
@@ -1043,7 +1017,7 @@
 
             // Chart
             const chartArea = createElement('div', 'flex-1 relative bg-slate-900 w-full overflow-hidden');
-            const basePrice = game.selectedCoin.price;
+            const basePrice = game.startSessionPrice;
             const dailyChange = ((game.currentPrice - basePrice) / basePrice) * 100;
             const dailyChangeText = (dailyChange >= 0 ? '+' : '') + dailyChange.toFixed(2) + '%';
             const dailyChangeColor = dailyChange >= 0 ? 'text-green-400' : 'text-red-400';
@@ -1067,8 +1041,6 @@
             makeDraggable(priceDisplay, chartArea);
 
             // Dashboard
-            // Reduced padding p-5 -> p-3, mb-6 -> mb-3, text sizes
-            // Increased pb to 36 (9rem) to allow scrolling past the floating nav
             const dashboard = createElement('div', 'bg-slate-800 p-3 rounded-t-3xl border-t border-slate-700 shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.5)] pb-36 overflow-y-auto custom-scroll z-20 relative -mt-4');
             const totalEquity = (game.balance + (game.position ? floatingPnL : 0) + (game.position ? game.position.margin : 0)).toFixed(2);
             const pnlColorClass = floatingPnL > 0 ? 'text-green-400' : floatingPnL < 0 ? 'text-red-400' : 'text-slate-200';
@@ -1085,7 +1057,6 @@
 
             if (!game.position) {
                 const inputsContainer = createElement('div', 'mb-2 animate-fade-in');
-                // Custom Slider HTML
                 inputsContainer.innerHTML = `
                     <div class="mb-4 slider-wrapper">
                         <div class="flex justify-between text-[10px] text-slate-400 mb-2 items-end">
@@ -1113,7 +1084,6 @@
                 inputsContainer.querySelectorAll('.margin-btn').forEach(btn => btn.onclick = () => setNestedState('game', { marginPercent: parseFloat(btn.dataset.value) }));
                 dashboard.appendChild(inputsContainer);
 
-                // Reduce button height (py-4 -> py-3) and font size
                 const actionArea = createElement('div', 'grid grid-cols-2 gap-3 mt-1');
                 const longBtn = createElement('button', 'bg-gradient-to-b from-green-500 to-green-600 hover:from-green-400 hover:to-green-500 text-white font-bold py-3 rounded-xl active:scale-[0.98] transition-transform shadow-lg shadow-green-500/20', `<span class="text-base block">做多 Buy</span><span class="text-[9px] opacity-80 font-normal tracking-wider">看漲 ${game.leverage}x</span>`);
                 longBtn.onclick = () => handleTrade('long');
@@ -1122,8 +1092,6 @@
                 actionArea.append(longBtn, shortBtn);
                 dashboard.appendChild(actionArea);
 
-                // Initialize Custom Slider SAFE MODE
-                // Find the specific slider container inside the just-appended inputsContainer
                 const sliderContainer = inputsContainer.querySelector('.slider-container');
                 if (sliderContainer) {
                     initLongPressSlider(sliderContainer, LEVERAGE_OPTIONS.indexOf(game.leverage), LEVERAGE_OPTIONS, (val) => {
@@ -1179,7 +1147,6 @@
             return view;
         }
 
-        // --- Main Render ---
         function renderApp() {
             APP_ROOT.innerHTML = ''; 
             const contentArea = createElement('div', 'flex-1 overflow-hidden relative z-0 bg-slate-900');
@@ -1187,7 +1154,6 @@
             else if (appState.activeTab === 'game') contentArea.appendChild(renderTradingGame());
             else if (appState.activeTab === 'about') contentArea.appendChild(renderAboutView());
 
-            // --- NAVIGATION BAR WITH EXTENDED SAFE AREA ---
             const navBar = createElement('div', 'h-auto pb-safe-extended pt-2 bg-slate-900/95 backdrop-blur-lg border-t border-slate-800 grid grid-cols-3 fixed bottom-0 w-full z-[50]');
             
             const createNavBtn = (id, label, icon) => {
